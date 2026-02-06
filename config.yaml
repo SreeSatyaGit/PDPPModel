@@ -1,0 +1,61 @@
+# Power Procurement Strategy ML Pipeline Configuration
+
+data:
+  num_samples: 500
+  time_steps: 48  # Hourly values for 2 days
+  random_seed: 42
+  train_test_split: 0.2
+  validation_split: 0.1
+
+gpu_types:
+  - A100
+  - H100
+  - MI300X
+
+workload_types:
+  - LLM_Training
+  - Inference
+
+# Power characteristics by GPU type (in kW per GPU)
+gpu_power_specs:
+  A100:
+    tdp: 0.4  # 400W
+    min_power: 0.1
+    max_power: 0.5
+  H100:
+    tdp: 0.7  # 700W
+    min_power: 0.2
+    max_power: 0.8
+  MI300X:
+    tdp: 0.75  # 750W
+    min_power: 0.2
+    max_power: 0.85
+
+forecaster:
+  model_type: "lstm"  # Options: lstm, tcn
+  hidden_size: 128
+  num_layers: 2
+  dropout: 0.2
+  learning_rate: 0.001
+  epochs: 100
+  batch_size: 32
+  early_stopping_patience: 10
+
+recommender:
+  model_type: "xgboost"  # Options: xgboost, random_forest, gradient_boosting
+  n_estimators: 200
+  max_depth: 6
+  learning_rate: 0.1
+  early_stopping_rounds: 20
+
+rl:
+  algorithm: "PPO"  # Options: PPO, DQN
+  total_timesteps: 50000
+  learning_rate: 0.0003
+  n_steps: 2048
+  batch_size: 64
+  gamma: 0.99
+
+dashboard:
+  port: 8501
+  theme: "dark"
