@@ -4,6 +4,7 @@ Power Procurement Strategy ML Pipeline - Main Entry Point
 ===========================================================
 
 Usage:
+    python main.py process      # Process real parquet data
     python main.py generate     # Generate synthetic dataset
     python main.py train        # Train all models
     python main.py evaluate     # Evaluate models
@@ -19,6 +20,38 @@ from pathlib import Path
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
+
+
+def process_data(args):
+    """Process real HPC job data from parquet format."""
+    from src.data_processor import RealDataProcessor
+    
+    print("🔄 Processing real HPC job data...")
+    
+    processor = RealDataProcessor(target_time_steps=args.time_steps)
+    
+    # Load parquet
+    df = processor.load_parquet(args.input)
+    
+    # Process with filters
+    processed_df = processor.process_dataset(
+        df,
+        filter_states=args.filter_states,
+        min_gpus=args.min_gpus,
+        max_samples=args.max_samples
+    )
+    
+    # Save
+    processor.save_processed_data(processed_df, args.output)
+    
+    # Print statistics
+    print("\n📊 Dataset Statistics:")
+    stats = processor.get_statistics(processed_df)
+    print(f"   Total Records: {stats['total_records']}")
+    print(f"   Workload Types: {stats['workload_types']}")
+    print(f"   GPU Types: {stats['gpu_types']}")
+    
+    return processed_df
 
 
 def generate_data(args):
@@ -184,6 +217,36 @@ def run_demo(args):
     print("   Run 'python main.py dashboard' to explore interactively")
 
 
+def visualize_results(args):
+    """Generate visualizations."""
+    from src.visualize import visualize_results as viz
+    viz(args.data)
+
+
+def train_rl(args):
+    """Train RL optimizer."""
+    from src.rl_optimizer import RLOptimizer
+    
+    print("🤖 Training RL policy optimizer...")
+    optimizer = RLOptimizer(args.config, args.data)
+    optimizer.train()
+    
+    print("\n📊 Evaluation:")
+    metrics = optimizer.evaluate()
+    for k, v in metrics.items():
+        print(f"   {k}: {v:.4f}")
+    
+    optimizer.save("models/rl")
+
+
+def run_api_server(args):
+    """Launch FastAPI inference server."""
+    import subprocess
+    print("🚀 Launching API server on http://localhost:8000")
+    print("   📖 API docs: http://localhost:8000/docs")
+    subprocess.run(["uvicorn", "api_server:app", "--host", "0.0.0.0", "--port", str(args.port), "--reload"])
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Power Procurement Strategy ML Pipeline",
@@ -194,6 +257,22 @@ def main():
     
     subparsers = parser.add_subparsers(dest="command", help="Command to run")
     
+    # Process command (real data)
+    proc_parser = subparsers.add_parser("process", help="Process real HPC job data from parquet")
+    proc_parser.add_argument("--input", type=str, default="data/job_table.parquet",
+                            help="Input parquet file path")
+    proc_parser.add_argument("--output", type=str, default="data/processed_dataset.csv",
+                            help="Output CSV file path")
+    proc_parser.add_argument("--filter-states", type=str, nargs='+',
+                            default=['COMPLETED', 'CANCELLED', 'FAILED'],
+                            help="Job states to include")
+    proc_parser.add_argument("--min-gpus", type=int, default=0,
+                            help="Minimum GPUs required")
+    proc_parser.add_argument("--max-samples", type=int, default=None,
+                            help="Maximum samples to process")
+    proc_parser.add_argument("--time-steps", type=int, default=48,
+                            help="Target time series length")
+    
     # Generate command
     gen_parser = subparsers.add_parser("generate", help="Generate synthetic dataset")
     gen_parser.add_argument("--samples", type=int, default=500, help="Number of samples")
@@ -201,14 +280,27 @@ def main():
     
     # Train command
     train_parser = subparsers.add_parser("train", help="Train models")
-    train_parser.add_argument("--data", type=str, default="data/synthetic_dataset.csv")
+    train_parser.add_argument("--data", type=str, default="data/processed_dataset.csv")
     
     # Evaluate command
     eval_parser = subparsers.add_parser("evaluate", help="Evaluate models")
-    eval_parser.add_argument("--data", type=str, default="data/synthetic_dataset.csv")
+    eval_parser.add_argument("--data", type=str, default="data/processed_dataset.csv")
     
     # Predict command
     pred_parser = subparsers.add_parser("predict", help="Make prediction")
+    
+    # Visualize command
+    viz_parser = subparsers.add_parser("visualize", help="Generate visualizations")
+    viz_parser.add_argument("--data", type=str, default="data/processed_dataset.csv")
+    
+    # Train RL command
+    rl_parser = subparsers.add_parser("train-rl", help="Train RL policy optimizer")
+    rl_parser.add_argument("--data", type=str, default="data/processed_dataset.csv")
+    rl_parser.add_argument("--timesteps", type=int, default=100000)
+    
+    # API server command
+    api_parser = subparsers.add_parser("api", help="Launch inference API server")
+    api_parser.add_argument("--port", type=int, default=8000, help="Server port")
     
     # Dashboard command
     dash_parser = subparsers.add_parser("dashboard", help="Launch dashboard")
@@ -218,7 +310,9 @@ def main():
     
     args = parser.parse_args()
     
-    if args.command == "generate":
+    if args.command == "process":
+        process_data(args)
+    elif args.command == "generate":
         generate_data(args)
     elif args.command == "train":
         train_models(args)
@@ -226,6 +320,12 @@ def main():
         evaluate_models(args)
     elif args.command == "predict":
         make_prediction(args)
+    elif args.command == "visualize":
+        visualize_results(args)
+    elif args.command == "train-rl":
+        train_rl(args)
+    elif args.command == "api":
+        run_api_server(args)
     elif args.command == "dashboard":
         run_dashboard(args)
     elif args.command == "demo":
